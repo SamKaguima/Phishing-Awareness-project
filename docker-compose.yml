@@ -1,0 +1,36 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: phishing-awareness-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: phishing_awareness
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d phishing_awareness"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./db/seed_demo.sql:/docker-entrypoint-initdb.d/02-seed_demo.sql:ro
+
+  app:
+    build: .
+    container_name: phishing-awareness-app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    environment:
+      PORT: 3000
+      DATABASE_URL: postgres://postgres:postgres@db:5432/phishing_awareness
+      IP_HASH_SALT: local-dev-salt-change-me
+      PG_SSL: "false"
+
+volumes:
+  pgdata:
