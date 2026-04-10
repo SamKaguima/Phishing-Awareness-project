@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Campaign Admin Dashboard</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+	<style>
+		:root {
+			--bg-1: #f4efe6;
+			--bg-2: #d5e3dc;
+			--ink: #0f172a;
+			--muted: #475569;
+			--panel: rgba(255, 255, 255, 0.78);
+			--line: rgba(15, 23, 42, 0.18);
+			--good: #1f7a4c;
+			--bad: #b42318;
+			--accent: #0e7490;
+			--accent-2: #f59e0b;
+		}
+
+		* { box-sizing: border-box; }
+
+		body {
+			margin: 0;
+			color: var(--ink);
+			font-family: "Space Grotesk", sans-serif;
+			min-height: 100vh;
+			background:
+				radial-gradient(circle at 85% 5%, rgba(14, 116, 144, 0.2) 0 25%, transparent 26%),
+				radial-gradient(circle at 8% 65%, rgba(245, 158, 11, 0.2) 0 20%, transparent 21%),
+				linear-gradient(140deg, var(--bg-1), var(--bg-2));
+			padding: 24px;
+		}
+
+		.dash {
+			max-width: 1200px;
+			margin: 0 auto;
+			display: grid;
+			gap: 18px;
+		}
+
+		.panel {
+			background: var(--panel);
+			border: 1px solid var(--line);
+			border-radius: 18px;
+			backdrop-filter: blur(6px);
+			box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
+			padding: 18px;
+		}
+
+		.hero {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			gap: 12px;
+			flex-wrap: wrap;
+		}
+
+		h1 { margin: 0; font-size: clamp(1.5rem, 2.5vw, 2.25rem); }
+		h2 { margin: 0 0 12px; font-size: 1.1rem; }
+		p { margin: 4px 0; color: var(--muted); }
+
+		.mono {
+			font-family: "IBM Plex Mono", monospace;
+			font-size: 0.86rem;
+		}
+
+		.btn {
+			background: var(--ink);
+			color: #fff;
+			border: none;
+			border-radius: 10px;
+			padding: 10px 14px;
+			cursor: pointer;
+			font-family: inherit;
+			font-weight: 700;
+		}
+
+		.btn.secondary { background: var(--accent); }
+
+		.grid-4 {
+			display: grid;
+			gap: 12px;
+			grid-template-columns: repeat(4, minmax(0, 1fr));
+		}
+
+		.stat {
+			border: 1px solid var(--line);
+			border-radius: 12px;
+			padding: 12px;
+			background: rgba(255, 255, 255, 0.6);
+		}
+
+		.stat-value {
+			font-size: 1.6rem;
+			font-weight: 700;
+			margin-top: 6px;
+		}
+
+		.grid-2 {
+			display: grid;
+			gap: 18px;
+			grid-template-columns: 1.1fr 0.9fr;
+		}
+
+		.table-wrap {
+			overflow-x: auto;
+			border: 1px solid var(--line);
+			border-radius: 12px;
+		}
+
+		table {
+			width: 100%;
+			border-collapse: collapse;
+			min-width: 580px;
+		}
+
+		th, td {
+			text-align: left;
+			padding: 10px;
+			border-bottom: 1px solid var(--line);
+			font-size: 0.92rem;
+		}
+
+		th { background: rgba(15, 23, 42, 0.05); }
+
+		.chip {
+			display: inline-block;
+			border-radius: 999px;
+			padding: 2px 10px;
+			font-size: 0.78rem;
+			font-weight: 600;
+			border: 1px solid;
+		}
+
+		.chip.bad { color: var(--bad); border-color: rgba(180, 35, 24, 0.5); background: rgba(180, 35, 24, 0.08); }
+		.chip.good { color: var(--good); border-color: rgba(31, 122, 76, 0.45); background: rgba(31, 122, 76, 0.1); }
+
+		form {
+			display: grid;
+			gap: 10px;
+		}
+
+		label {
+			font-size: 0.88rem;
+			font-weight: 600;
+			color: var(--muted);
+		}
+
+		input, textarea {
+			width: 100%;
+			border-radius: 10px;
+			border: 1px solid var(--line);
+			padding: 10px;
+			font: inherit;
+			background: rgba(255, 255, 255, 0.86);
+		}
+
+		textarea { min-height: 110px; resize: vertical; }
+
+		.status {
+			min-height: 20px;
+			font-size: 0.88rem;
+			font-weight: 600;
+		}
+
+		.status.ok { color: var(--good); }
+		.status.err { color: var(--bad); }
+
+		@media (max-width: 980px) {
+			.grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+			.grid-2 { grid-template-columns: 1fr; }
+		}
+
+		@media (max-width: 560px) {
+			body { padding: 14px; }
+			.grid-4 { grid-template-columns: 1fr; }
+		}
+	</style>
+</head>
+<body>
+	<main class="dash">
+		<section class="panel hero">
+			<div>
+				<h1>Phishing Campaign Admin</h1>
+				<p>Monitor campaign performance and launch new simulations from one view.</p>
+			</div>
+			<div>
+				<button class="btn secondary" id="refreshBtn" type="button">Refresh Dashboard</button>
+			</div>
+		</section>
+
+		<section class="panel">
+			<h2>Portfolio Metrics</h2>
+			<div class="grid-4" id="summaryCards">
+				<article class="stat"><div>Total campaigns</div><div class="stat-value" id="totalCampaigns">-</div></article>
+				<article class="stat"><div>Total emails sent</div><div class="stat-value" id="totalSent">-</div></article>
+				<article class="stat"><div>Open rate</div><div class="stat-value" id="openRate">-</div></article>
+				<article class="stat"><div>Click rate</div><div class="stat-value" id="clickRate">-</div></article>
+			</div>
+		</section>
+
+		<section class="grid-2">
+			<article class="panel">
+				<h2>Current Campaign Snapshot</h2>
+				<p id="currentCampaignName" class="mono">No campaigns yet.</p>
+				<p id="currentCampaignStats">Start your first campaign using the form.</p>
+			</article>
+
+			<article class="panel">
+				<h2>Start Campaign</h2>
+				<form id="campaignForm">
+					<label for="name">Campaign name</label>
+					<input id="name" name="name" placeholder="April Security Awareness" required>
+
+					<label for="description">Description</label>
+					<input id="description" name="description" placeholder="Quarterly phishing simulation">
+
+					<label for="subject">Email subject</label>
+					<input id="subject" name="subject" placeholder="Action Required: Account Verification" required>
+
+					<label for="targetUrl">Click destination URL</label>
+					<input id="targetUrl" name="targetUrl" placeholder="http://localhost:3000/scamScreen.html">
+
+					<label for="emailBody">Email HTML body</label>
+					<textarea id="emailBody" name="emailBody" required><p>Hello {{name}},</p><p>Please review this urgent update.</p><p><a href="{{link}}">Review now</a></p></textarea>
+
+					<label for="targets">Targets (one email per line)</label>
+					<textarea id="targets" name="targets" required placeholder="user1@example.com&#10;user2@example.com"></textarea>
+
+					<button class="btn" type="submit">Launch Campaign</button>
+					<div class="status" id="formStatus"></div>
+				</form>
+			</article>
+		</section>
+
+		<section class="panel">
+			<h2>Recent Campaigns</h2>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>ID</th>
+							<th>Name</th>
+							<th>Sent</th>
+							<th>Opened</th>
+							<th>Clicked</th>
+							<th>Open %</th>
+							<th>Click %</th>
+						</tr>
+					</thead>
+					<tbody id="campaignRows">
+						<tr><td colspan="7">Loading...</td></tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+
+		<section class="panel">
+			<h2>Ingestion Reliability Feed</h2>
+			<div class="table-wrap">
+				<table>
+					<thead>
+						<tr>
+							<th>Time</th>
+							<th>Status</th>
+							<th>Event</th>
+							<th>Token</th>
+							<th>Reason</th>
+						</tr>
+					</thead>
+					<tbody id="auditRows">
+						<tr><td colspan="5">Loading...</td></tr>
+					</tbody>
+				</table>
+			</div>
+		</section>
+	</main>
+
+	<script>
+		function toNumber(value) {
+			return Number(value || 0);
+		}
+
+		function pct(value) {
+			if (value === null || value === undefined || Number.isNaN(Number(value))) {
+				return "0.00%";
+			}
+			return `${Number(value).toFixed(2)}%`;
+		}
+
+		function escapeHtml(value) {
+			return String(value ?? "")
+				.replace(/&/g, "&amp;")
+				.replace(/</g, "&lt;")
+				.replace(/>/g, "&gt;")
+				.replace(/\"/g, "&quot;")
+				.replace(/'/g, "&#039;");
+		}
+
+		async function fetchJson(url, options) {
+			const response = await fetch(url, options);
+			const data = await response.json().catch(() => ({}));
+			if (!response.ok) {
+				throw new Error(data.error || `Request failed: ${response.status}`);
+			}
+			return data;
+		}
+
+		function renderSummary(summary) {
+			document.getElementById("totalCampaigns").textContent = toNumber(summary.total_campaigns);
+			document.getElementById("totalSent").textContent = toNumber(summary.total_emails_sent);
+			document.getElementById("openRate").textContent = pct(summary.overall_open_rate_pct);
+			document.getElementById("clickRate").textContent = pct(summary.overall_click_rate_pct);
+		}
+
+		function renderCurrentCampaign(campaign) {
+			const nameEl = document.getElementById("currentCampaignName");
+			const statsEl = document.getElementById("currentCampaignStats");
+			if (!campaign) {
+				nameEl.textContent = "No campaigns yet.";
+				statsEl.textContent = "Start your first campaign using the form.";
+				return;
+			}
+			nameEl.textContent = `#${campaign.id} ${campaign.name}`;
+			statsEl.textContent = `Sent ${toNumber(campaign.emails_sent)} | Opened ${toNumber(campaign.emails_opened)} | Clicked ${toNumber(campaign.emails_clicked)} | Open ${pct(campaign.open_rate_pct)} | Click ${pct(campaign.click_rate_pct)}`;
+		}
+
+		function renderCampaigns(rows) {
+			const body = document.getElementById("campaignRows");
+			if (!rows || rows.length === 0) {
+				body.innerHTML = '<tr><td colspan="7">No campaigns yet.</td></tr>';
+				return;
+			}
+
+			body.innerHTML = rows.map((row) => `
+				<tr>
+					<td>${row.id}</td>
+					<td>${escapeHtml(row.name)}</td>
+					<td>${toNumber(row.emails_sent)}</td>
+					<td>${toNumber(row.emails_opened)}</td>
+					<td>${toNumber(row.emails_clicked)}</td>
+					<td>${pct(row.open_rate_pct)}</td>
+					<td>${pct(row.click_rate_pct)}</td>
+				</tr>
+			`).join("");
+		}
+
+		function renderAudit(rows) {
+			const body = document.getElementById("auditRows");
+			if (!rows || rows.length === 0) {
+				body.innerHTML = '<tr><td colspan="5">No audit records yet.</td></tr>';
+				return;
+			}
+
+			body.innerHTML = rows.map((row) => {
+				const ok = row.status === "saved" || row.status === "duplicate_ignored";
+				return `
+					<tr>
+						<td class="mono">${new Date(row.created_at).toLocaleString()}</td>
+						<td><span class="chip ${ok ? "good" : "bad"}">${escapeHtml(row.status)}</span></td>
+						<td>${escapeHtml(row.event_type || "-")}</td>
+						<td class="mono">${escapeHtml(row.tracking_token || "-")}</td>
+						<td>${escapeHtml(row.reason || "-")}</td>
+					</tr>
+				`;
+			}).join("");
+		}
+
+		async function loadDashboard() {
+			const [overview, audit] = await Promise.all([
+				fetchJson('/api/dashboard/overview'),
+				fetchJson('/api/dashboard/ingestion-audit?limit=20')
+			]);
+			renderSummary(overview.summary || {});
+			renderCurrentCampaign(overview.currentCampaign);
+			renderCampaigns(overview.recentCampaigns || []);
+			renderAudit(audit.rows || []);
+		}
+
+		function parseTargets(raw) {
+			return raw
+				.split(/\r?\n/)
+				.map((line) => line.trim())
+				.filter(Boolean)
+				.map((email) => ({ email }));
+		}
+
+		async function onSubmit(event) {
+			event.preventDefault();
+			const statusEl = document.getElementById("formStatus");
+			statusEl.className = "status";
+			statusEl.textContent = "Launching campaign...";
+
+			const payload = {
+				name: document.getElementById("name").value,
+				description: document.getElementById("description").value,
+				subject: document.getElementById("subject").value,
+				targetUrl: document.getElementById("targetUrl").value || undefined,
+				emailBody: document.getElementById("emailBody").value,
+				targets: parseTargets(document.getElementById("targets").value)
+			};
+
+			if (payload.targets.length === 0) {
+				statusEl.className = "status err";
+				statusEl.textContent = "Add at least one target email.";
+				return;
+			}
+
+			try {
+				const result = await fetchJson('/api/campaigns/start', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				});
+
+				statusEl.className = "status ok";
+				statusEl.textContent = `Campaign #${result.campaignId} launched. Sent ${result.sent}, failed ${result.failed}.`;
+				document.getElementById("campaignForm").reset();
+				await loadDashboard();
+			} catch (error) {
+				statusEl.className = "status err";
+				statusEl.textContent = error.message;
+			}
+		}
+
+		document.getElementById("refreshBtn").addEventListener("click", () => {
+			loadDashboard().catch((error) => {
+				console.error(error);
+			});
+		});
+
+		document.getElementById("campaignForm").addEventListener("submit", onSubmit);
+
+		loadDashboard().catch((error) => {
+			const statusEl = document.getElementById("formStatus");
+			statusEl.className = "status err";
+			statusEl.textContent = error.message;
+		});
+	</script>
+</body>
+</html>

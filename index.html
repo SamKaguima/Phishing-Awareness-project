@@ -1,1 +1,138 @@
-hello world
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Phishing Awareness Landing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-1: #0b132b;
+      --bg-2: #1c2541;
+      --bg-3: #3a506b;
+      --panel: rgba(255, 255, 255, 0.08);
+      --line: rgba(255, 255, 255, 0.2);
+      --ink: #f8fafc;
+      --muted: #cbd5e1;
+      --cta: #f59e0b;
+      --cta-dark: #d97706;
+      --accent: #2dd4bf;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Space Grotesk", sans-serif;
+      color: var(--ink);
+      min-height: 100vh;
+      background:
+        radial-gradient(ellipse at top right, rgba(45, 212, 191, 0.3), transparent 40%),
+        radial-gradient(ellipse at bottom left, rgba(245, 158, 11, 0.25), transparent 45%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2) 50%, var(--bg-3));
+      display: grid;
+      place-items: center;
+      padding: 20px;
+    }
+
+    .wrap {
+      width: min(920px, 100%);
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 20px;
+      padding: clamp(20px, 4vw, 42px);
+      box-shadow: 0 20px 45px rgba(0, 0, 0, 0.3);
+    }
+
+    h1 {
+      margin: 0;
+      line-height: 1.1;
+      font-size: clamp(2rem, 5vw, 3.4rem);
+    }
+
+    p {
+      margin: 14px 0 0;
+      font-size: clamp(1rem, 2vw, 1.2rem);
+      color: var(--muted);
+      max-width: 58ch;
+    }
+
+    .actions {
+      display: grid;
+      gap: 12px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      margin-top: 28px;
+    }
+
+    .card {
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      padding: 18px;
+      text-decoration: none;
+      color: var(--ink);
+      background: rgba(255, 255, 255, 0.04);
+      transition: transform 140ms ease, border-color 140ms ease, background 140ms ease;
+    }
+
+    .card:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent);
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .card h2 {
+      margin: 0;
+      font-size: 1.2rem;
+    }
+
+    .card p {
+      margin-top: 8px;
+      font-size: 0.95rem;
+      color: var(--muted);
+    }
+
+    .cta {
+      display: inline-block;
+      margin-top: 26px;
+      padding: 12px 18px;
+      border-radius: 10px;
+      background: var(--cta);
+      color: #111827;
+      text-decoration: none;
+      font-weight: 700;
+      transition: background 120ms ease;
+    }
+
+    .cta:hover { background: var(--cta-dark); }
+
+    @media (max-width: 720px) {
+      .actions { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>Phishing Awareness Simulator</h1>
+    <p>
+      This landing page is for your project demo flow. Launch a sample phishing page,
+      or open the admin dashboard to start campaigns and monitor live statistics.
+    </p>
+
+    <section class="actions">
+      <a class="card" href="/scamScreen.html">
+        <h2>Simulation Page</h2>
+        <p>Preview what a target sees after clicking a tracked link.</p>
+      </a>
+
+      <a class="card" href="/admin.html">
+        <h2>Admin Dashboard</h2>
+        <p>Launch campaigns, review open/click rates, and inspect ingestion reliability.</p>
+      </a>
+    </section>
+
+    <a class="cta" href="/admin.html">Go to Admin Dashboard</a>
+  </main>
+</body>
+</html>

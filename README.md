@@ -39,7 +39,8 @@ Environment variables for local run:
 
 ## Verify It Works
 
-- App: `http://localhost:3000`
+- Landing page: `http://localhost:3000`
+- Admin dashboard: `http://localhost:3000/admin.html`
 - Health check: `http://localhost:3000/health`
 - Campaign stats example: `http://localhost:3000/api/stats/campaign/1`
 

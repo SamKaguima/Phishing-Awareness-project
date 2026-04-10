@@ -262,6 +262,117 @@ app.get('/api/stats/campaign/:campaignId', async (req, res) => {
     }
 });
 
+app.get('/api/dashboard/overview', async (req, res) => {
+    if (!pool) {
+        return res.status(503).json({ error: 'Database is not configured' });
+    }
+
+    const summaryQuery = `
+        SELECT
+            COUNT(*)::int AS total_campaigns,
+            COALESCE(SUM(campaign_metrics.emails_sent), 0)::int AS total_emails_sent,
+            COALESCE(SUM(campaign_metrics.emails_opened), 0)::int AS total_emails_opened,
+            COALESCE(SUM(campaign_metrics.emails_clicked), 0)::int AS total_emails_clicked,
+            ROUND(
+                100.0 * COALESCE(SUM(campaign_metrics.emails_opened), 0)
+                / NULLIF(COALESCE(SUM(campaign_metrics.emails_sent), 0), 0),
+                2
+            ) AS overall_open_rate_pct,
+            ROUND(
+                100.0 * COALESCE(SUM(campaign_metrics.emails_clicked), 0)
+                / NULLIF(COALESCE(SUM(campaign_metrics.emails_sent), 0), 0),
+                2
+            ) AS overall_click_rate_pct
+        FROM campaigns c
+        LEFT JOIN (
+            SELECT
+                c2.id AS campaign_id,
+                COUNT(DISTINCT e.id) AS emails_sent,
+                COUNT(DISTINCT e.id) FILTER (WHERE ev.event_type = 'opened') AS emails_opened,
+                COUNT(DISTINCT e.id) FILTER (WHERE ev.event_type = 'clicked') AS emails_clicked
+            FROM campaigns c2
+            LEFT JOIN emails e ON e.campaign_id = c2.id
+            LEFT JOIN email_events ev ON ev.email_id = e.id
+            GROUP BY c2.id
+        ) campaign_metrics ON campaign_metrics.campaign_id = c.id;
+    `;
+
+    const recentCampaignsQuery = `
+        SELECT
+            c.id,
+            c.name,
+            c.description,
+            c.starts_at,
+            c.created_at,
+            COUNT(DISTINCT e.id)::int AS emails_sent,
+            COUNT(DISTINCT e.id) FILTER (WHERE ev.event_type = 'opened')::int AS emails_opened,
+            COUNT(DISTINCT e.id) FILTER (WHERE ev.event_type = 'clicked')::int AS emails_clicked,
+            ROUND(
+                100.0 * COUNT(DISTINCT e.id) FILTER (WHERE ev.event_type = 'opened')
+                / NULLIF(COUNT(DISTINCT e.id), 0),
+                2
+            ) AS open_rate_pct,
+            ROUND(
+                100.0 * COUNT(DISTINCT e.id) FILTER (WHERE ev.event_type = 'clicked')
+                / NULLIF(COUNT(DISTINCT e.id), 0),
+                2
+            ) AS click_rate_pct
+        FROM campaigns c
+        LEFT JOIN emails e ON e.campaign_id = c.id
+        LEFT JOIN email_events ev ON ev.email_id = e.id
+        GROUP BY c.id
+        ORDER BY c.created_at DESC
+        LIMIT 6;
+    `;
+
+    try {
+        const [summaryResult, recentResult] = await Promise.all([
+            pool.query(summaryQuery),
+            pool.query(recentCampaignsQuery)
+        ]);
+
+        const summary = summaryResult.rows[0] || {
+            total_campaigns: 0,
+            total_emails_sent: 0,
+            total_emails_opened: 0,
+            total_emails_clicked: 0,
+            overall_open_rate_pct: null,
+            overall_click_rate_pct: null
+        };
+
+        return res.json({
+            summary,
+            currentCampaign: recentResult.rows[0] || null,
+            recentCampaigns: recentResult.rows
+        });
+    } catch (error) {
+        console.error('Dashboard overview query failed:', error.message);
+        return res.status(500).json({ error: 'Failed to fetch dashboard overview' });
+    }
+});
+
+app.get('/api/dashboard/ingestion-audit', async (req, res) => {
+    if (!pool) {
+        return res.status(503).json({ error: 'Database is not configured' });
+    }
+
+    const limit = Math.min(Math.max(Number(req.query.limit) || 20, 1), 100);
+    const query = `
+        SELECT id, tracking_token, event_type, status, reason, metadata, created_at
+        FROM ingestion_audit_log
+        ORDER BY created_at DESC
+        LIMIT $1;
+    `;
+
+    try {
+        const result = await pool.query(query, [limit]);
+        return res.json({ rows: result.rows });
+    } catch (error) {
+        console.error('Ingestion audit query failed:', error.message);
+        return res.status(500).json({ error: 'Failed to fetch ingestion audit logs' });
+    }
+});
+
 // Start a campaign, sending emails to the specified targets
 app.post('/api/campaigns/start', async (req, res) => {
     if (!pool) {
