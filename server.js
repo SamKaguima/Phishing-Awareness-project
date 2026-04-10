@@ -10,6 +10,7 @@ const PORT = Number(process.env.PORT) || 3000;
 
 const DATABASE_URL = process.env.DATABASE_URL;
 const IP_HASH_SALT = process.env.IP_HASH_SALT || 'dev-only-salt-change-me';
+const INGESTION_AUDIT_ENABLED = process.env.INGESTION_AUDIT_ENABLED !== 'false';
 
 const pool = DATABASE_URL
     ? new Pool({
@@ -59,30 +60,101 @@ function hashIp(ip) {
     return crypto.createHash('sha256').update(`${IP_HASH_SALT}:${ip}`).digest('hex');
 }
 
+function normalizeMetadata(metadata) {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+        return {};
+    }
+    return metadata;
+}
+
+async function logIngestionAudit({ trackingToken, eventType, status, reason = null, metadata = {} }) {
+    if (!pool || !INGESTION_AUDIT_ENABLED) {
+        return;
+    }
+
+    const safeMetadata = normalizeMetadata(metadata);
+    const query = `
+        INSERT INTO ingestion_audit_log (tracking_token, event_type, status, reason, metadata)
+        VALUES ($1, $2, $3, $4, $5::jsonb);
+    `;
+
+    try {
+        await pool.query(query, [
+            trackingToken || null,
+            eventType || null,
+            status,
+            reason,
+            JSON.stringify(safeMetadata)
+        ]);
+    } catch (error) {
+        console.error('Failed to write ingestion audit log:', error.message);
+    }
+}
+
 async function recordEmailEvent(token, eventType, req, metadata = {}) {
     if (!pool) {
-        return { saved: false, reason: 'Database is not configured' };
+        return { saved: false, status: 'db_not_configured', reason: 'Database is not configured' };
     }
 
     const ipHash = hashIp(getClientIp(req));
     const userAgent = req.get('user-agent') || null;
 
     const query = `
-        INSERT INTO email_events (email_id, event_type, metadata, ip_hash, user_agent)
-        SELECT e.id, $2, $3::jsonb, $4, $5
-        FROM emails e
-        WHERE e.tracking_token = $1
-        RETURNING id;
+        WITH email_match AS (
+            SELECT e.id
+            FROM emails e
+            WHERE e.tracking_token = $1
+        ), inserted AS (
+            INSERT INTO email_events (email_id, event_type, metadata, ip_hash, user_agent)
+            SELECT m.id, $2, $3::jsonb, $4, $5
+            FROM email_match m
+            ON CONFLICT (email_id, event_type) DO NOTHING
+            RETURNING id
+        )
+        SELECT
+            (SELECT COUNT(*)::int FROM email_match) AS email_found,
+            (SELECT COUNT(*)::int FROM inserted) AS inserted_count;
     `;
 
-    const values = [token, eventType, JSON.stringify(metadata), ipHash, userAgent];
-    const result = await pool.query(query, values);
+    const values = [token, eventType, JSON.stringify(normalizeMetadata(metadata)), ipHash, userAgent];
 
-    if (result.rowCount === 0) {
-        return { saved: false, reason: 'Token not found' };
+    try {
+        const result = await pool.query(query, values);
+        const summary = result.rows[0];
+
+        if (!summary || summary.email_found === 0) {
+            await logIngestionAudit({
+                trackingToken: token,
+                eventType,
+                status: 'invalid_token',
+                reason: 'Token not found',
+                metadata: { route: req.path }
+            });
+            return { saved: false, status: 'invalid_token', reason: 'Token not found' };
+        }
+
+        if (summary.inserted_count === 0) {
+            await logIngestionAudit({
+                trackingToken: token,
+                eventType,
+                status: 'duplicate_ignored',
+                reason: 'Duplicate event ignored',
+                metadata: { route: req.path }
+            });
+            return { saved: false, status: 'duplicate_ignored', reason: 'Duplicate event ignored' };
+        }
+
+        return { saved: true, status: 'saved' };
+    } catch (error) {
+        await logIngestionAudit({
+            trackingToken: token,
+            eventType,
+            status: 'db_error',
+            reason: error.message,
+            metadata: { route: req.path }
+        });
+        return { saved: false, status: 'db_error', reason: error.message };
     }
-
-    return { saved: true };
 }
 
 function resolveTargetUrl(rawTarget) {
@@ -121,10 +193,9 @@ app.get('/health', async (req, res) => {
 });
 
 app.get('/track/open/:token.png', async (req, res) => {
-    try {
-        await recordEmailEvent(req.params.token, 'opened', req, { source: 'tracking-pixel' });
-    } catch (error) {
-        console.error('Open tracking failed:', error.message);
+    const result = await recordEmailEvent(req.params.token, 'opened', req, { source: 'tracking-pixel' });
+    if (result.status === 'db_error') {
+        console.error('Open tracking failed:', result.reason);
     }
 
     res.set('Content-Type', 'image/png');
@@ -137,10 +208,9 @@ app.get('/track/open/:token.png', async (req, res) => {
 app.get('/track/click/:token', async (req, res) => {
     const destination = resolveTargetUrl(req.query.to);
 
-    try {
-        await recordEmailEvent(req.params.token, 'clicked', req, { destination });
-    } catch (error) {
-        console.error('Click tracking failed:', error.message);
+    const result = await recordEmailEvent(req.params.token, 'clicked', req, { destination });
+    if (result.status === 'db_error') {
+        console.error('Click tracking failed:', result.reason);
     }
 
     return res.redirect(destination);
@@ -212,10 +282,21 @@ app.post('/api/campaigns/start', async (req, res) => {
     if (!Array.isArray(targets) || targets.length === 0) {
         return res.status(400).json({ error: '"targets" must be a non-empty array' });
     }
+    const uniqueTargets = [];
+    const seenEmails = new Set();
     for (const t of targets) {
         if (!t.email || typeof t.email !== 'string') {
             return res.status(400).json({ error: 'Each target must have an "email" field' });
         }
+        const normalizedEmail = t.email.trim().toLowerCase();
+        if (seenEmails.has(normalizedEmail)) {
+            continue;
+        }
+        seenEmails.add(normalizedEmail);
+        uniqueTargets.push({ ...t, email: normalizedEmail });
+    }
+    if (uniqueTargets.length === 0) {
+        return res.status(400).json({ error: 'At least one unique target email is required' });
     }
 
     let transport;
@@ -240,8 +321,8 @@ app.post('/api/campaigns/start', async (req, res) => {
 
         const results = [];
 
-        for (const t of targets) {
-            const email = t.email.trim().toLowerCase();
+        for (const t of uniqueTargets) {
+            const email = t.email;
             const fullName = t.full_name || null;
             const department = t.department || null;
 
@@ -285,13 +366,21 @@ app.post('/api/campaigns/start', async (req, res) => {
 
                 await client.query(
                     `INSERT INTO email_events (email_id, event_type, metadata)
-                     SELECT id, 'sent', '{}'::jsonb FROM emails WHERE tracking_token = $1`,
+                     SELECT id, 'sent', '{}'::jsonb FROM emails WHERE tracking_token = $1
+                     ON CONFLICT (email_id, event_type) DO NOTHING`,
                     [token]
                 );
 
                 results.push({ email, status: 'sent', token });
             } catch (sendErr) {
                 console.error(`Failed to send to ${email}:`, sendErr.message);
+                await logIngestionAudit({
+                    trackingToken: token,
+                    eventType: 'sent',
+                    status: 'smtp_send_failed',
+                    reason: sendErr.message,
+                    metadata: { email }
+                });
                 results.push({ email, status: 'failed', reason: sendErr.message });
             }
         }
