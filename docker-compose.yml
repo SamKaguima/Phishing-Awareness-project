@@ -31,6 +31,9 @@ services:
       DATABASE_URL: postgres://postgres:postgres@db:5432/phishing_awareness
       IP_HASH_SALT: local-dev-salt-change-me
       PG_SSL: "false"
+      APP_BASE_URL: "http://localhost:3000"
+      SMTP_USER: "${SMTP_USER}"
+      SMTP_PASS: "${SMTP_PASS}"
 
 volumes:
   pgdata:
