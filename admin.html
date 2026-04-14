@@ -150,7 +150,7 @@
 			color: var(--muted);
 		}
 
-		input, textarea {
+		input, textarea, select {
 			width: 100%;
 			border-radius: 10px;
 			border: 1px solid var(--line);
@@ -158,6 +158,8 @@
 			font: inherit;
 			background: rgba(255, 255, 255, 0.86);
 		}
+
+		select { cursor: pointer; }
 
 		textarea { min-height: 110px; resize: vertical; }
 
@@ -225,8 +227,16 @@
 					<label for="targetUrl">Click destination URL</label>
 					<input id="targetUrl" name="targetUrl" placeholder="http://localhost:3000/scamScreen.html">
 
-					<label for="emailBody">Email HTML body</label>
-					<textarea id="emailBody" name="emailBody" required><p>Hello {{name}},</p><p>Please review this urgent update.</p><p><a href="{{link}}">Review now</a></p></textarea>
+					<label for="emailTemplate">Email template</label>
+					<select id="emailTemplate">
+						<option value="">-- Select a template --</option>
+						<option value="__custom__">Custom (write your own)</option>
+					</select>
+
+					<div id="emailBodySection" style="display:none;">
+						<label for="emailBody">Email HTML body</label>
+						<textarea id="emailBody" name="emailBody"><p>Hello {{name}},</p><p>Please review this urgent update.</p><p><a href="{{link}}">Review now</a></p></textarea>
+					</div>
 
 					<label for="targets">Targets (one email per line)</label>
 					<textarea id="targets" name="targets" required placeholder="user1@example.com&#10;user2@example.com"></textarea>
@@ -395,12 +405,37 @@
 			statusEl.className = "status";
 			statusEl.textContent = "Launching campaign...";
 
+			const templateVal = document.getElementById("emailTemplate").value;
+			let emailBody;
+			if (templateVal === "__custom__") {
+				emailBody = document.getElementById("emailBody").value.trim();
+				if (!emailBody) {
+					statusEl.className = "status err";
+					statusEl.textContent = "Email body cannot be empty.";
+					return;
+				}
+			} else if (templateVal) {
+				try {
+					const resp = await fetch(`/emails/${encodeURIComponent(templateVal)}`);
+					if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+					emailBody = await resp.text();
+				} catch (err) {
+					statusEl.className = "status err";
+					statusEl.textContent = `Failed to load template: ${err.message}`;
+					return;
+				}
+			} else {
+				statusEl.className = "status err";
+				statusEl.textContent = "Please select a template or choose Custom.";
+				return;
+			}
+
 			const payload = {
 				name: document.getElementById("name").value,
 				description: document.getElementById("description").value,
 				subject: document.getElementById("subject").value,
 				targetUrl: document.getElementById("targetUrl").value || undefined,
-				emailBody: document.getElementById("emailBody").value,
+				emailBody,
 				targets: parseTargets(document.getElementById("targets").value)
 			};
 
@@ -420,12 +455,38 @@
 				statusEl.className = "status ok";
 				statusEl.textContent = `Campaign #${result.campaignId} launched. Sent ${result.sent}, failed ${result.failed}.`;
 				document.getElementById("campaignForm").reset();
+				document.getElementById("emailBodySection").style.display = "none";
 				await loadDashboard();
 			} catch (error) {
 				statusEl.className = "status err";
 				statusEl.textContent = error.message;
 			}
 		}
+
+		async function loadTemplates() {
+			try {
+				const data = await fetchJson('/api/email-templates');
+				const select = document.getElementById("emailTemplate");
+				const customOpt = select.querySelector('option[value="__custom__"]');
+				// Remove any previously loaded template options (keep placeholder + custom)
+				Array.from(select.options).forEach(opt => {
+					if (opt.value !== '' && opt.value !== '__custom__') opt.remove();
+				});
+				(data.templates || []).forEach(filename => {
+					const opt = document.createElement('option');
+					opt.value = filename;
+					opt.textContent = filename.replace(/\.html$/i, '');
+					select.insertBefore(opt, customOpt);
+				});
+			} catch (err) {
+				console.error('Failed to load email templates:', err);
+			}
+		}
+
+		document.getElementById("emailTemplate").addEventListener("change", function () {
+			document.getElementById("emailBodySection").style.display =
+				this.value === "__custom__" ? "block" : "none";
+		});
 
 		document.getElementById("refreshBtn").addEventListener("click", () => {
 			loadDashboard().catch((error) => {
@@ -435,7 +496,7 @@
 
 		document.getElementById("campaignForm").addEventListener("submit", onSubmit);
 
-		loadDashboard().catch((error) => {
+		Promise.all([loadDashboard(), loadTemplates()]).catch((error) => {
 			const statusEl = document.getElementById("formStatus");
 			statusEl.className = "status err";
 			statusEl.textContent = error.message;

@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const express = require('express');
+const fs = require('fs');
 const nodemailer = require('nodemailer');
 const path = require('path');
 const { Pool } = require('pg');
@@ -189,6 +190,18 @@ app.get('/health', async (req, res) => {
         return res.json({ ok: true, db: 'connected' });
     } catch (error) {
         return res.status(500).json({ ok: false, db: 'error', message: error.message });
+    }
+});
+
+app.get('/api/email-templates', (req, res) => {
+    const emailsDir = path.join(__dirname, 'emails');
+    try {
+        const files = fs.readdirSync(emailsDir)
+            .filter(f => f.toLowerCase().endsWith('.html'))
+            .sort();
+        return res.json({ templates: files });
+    } catch {
+        return res.json({ templates: [] });
     }
 });
 

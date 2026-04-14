@@ -36,6 +36,8 @@ Environment variables for local run:
 - `IP_HASH_SALT=change-me-in-real-env`
 - `PG_SSL=false`
 - `INGESTION_AUDIT_ENABLED=true`
+- `SMTP_USER=your-gmail@gmail.com`
+- `SMTP_PASS=your-16-char-app-password`
 
 ## Verify It Works
 
